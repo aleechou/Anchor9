@@ -1,0 +1,13 @@
+{
+    "name": "anchor9",
+    "version": "0.0.1",
+    "description": "A HTML Layout base on 9 Anchors",
+    "repository": {
+        "type" : "git",
+        "url" : "https://github.com/aleechou/Anchor9.git"
+    } ,
+    "main": "anchor9.js",
+    "scripts": {},
+    "author": "alee chou",
+    "license": "MIT"
+  }

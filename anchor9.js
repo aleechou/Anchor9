@@ -23,7 +23,7 @@
     const MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
     const PNAME = "_$Anchor9"
 
-    Anchor9.version = '0.0.3'
+    Anchor9.version = '0.0.4'
 
     function Anchor9 () {
         this.enable = true
@@ -392,15 +392,17 @@
             return
         }
 
-        // 锚定的元素是自己的坐标系元素
-        if( this.linkTo.anchorable.element == this.anchorable.cacheCoordinateSystemElement ){
+        var coorEle = this.anchorable.coordinateSystemElement()
+
+        // 锚定到自己的坐标系元素上
+        if( this.linkTo.anchorable.element == coorEle ){
             var pos = this.linkTo.positionFromElement(true, axe)
         }
         else if ( 
             // 锚定对象为 window
             this.linkTo.anchorable.element == window
             // 锚定元素 和 自己 在同一个坐标系中
-            || this.linkTo.anchorable.cacheCoordinateSystemElement==this.anchorable.cacheCoordinateSystemElement
+            || this.linkTo.anchorable.coordinateSystemElement()==coorEle
         ) {
             var pos = this.linkTo.positionFromElement(false, axe)
         }

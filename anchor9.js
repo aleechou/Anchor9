@@ -103,6 +103,7 @@
         this.cacheCoordinateSystemElement = this.coordinateSystemElement()
         this.cacheRect = this.rect()
         this.dbglog = element.attributes && !!element.attributes.dbglog
+        this._handles = []
 
         if(element==window) {
             window.addEventListener("resize",()=>this.emitChanged())
@@ -116,6 +117,16 @@
             this.elementsObserver.observe(element, { attributes: true, childList: true, characterData: true, subtree: true })
         }
     }
+
+    AnchorableElement.prototype.on = function(cb) {
+        this._handles.push(cb)
+    }
+    AnchorableElement.prototype.off = function(cb) {
+        var idx = this._handles.indexOf(cb)
+        if(idx>=0)
+            this._handles.splice(idx,1)
+    }
+
     /**
      * 计算元素的全局坐标
      * parent 链上所有 absolute 元素的 offsetTop/offsetLeft 的和
@@ -194,22 +205,32 @@
     /**
      * 检查元素的 rect ，如果发生了变化则返回新的 rect, 否则返回 undefined
      */
-    AnchorableElement.prototype.isChanged = function() {
-        var newRect = this.rect()
+    AnchorableElement.prototype.isChanged = function(newRect) {
+        if(!newRect)
+            newRect = this.rect()
+        var changedRect = {}
+        var changed = false
         for(var k in newRect) {
-            if(newRect[k]!=this.cacheRect[k]) 
-                return newRect
+            if(newRect[k]!=this.cacheRect[k]) {
+                changedRect[k] = newRect[k]
+                changed = true
+            }
         }
+        return changed? changedRect: null
     }
     /**
      * 如果自身的位置和尺寸发生变化，导致自身锚点位置变化，
      * 更新绑定到这些锚点的元素
      */
     AnchorableElement.prototype.emitChanged = function() {
-        var newRect = this.isChanged()
-        if(!newRect) return
+        var newRect = this.rect()
+        var changedRect = this.isChanged(newRect)
+        if(!changedRect) return
 
         this.cacheRect = newRect
+
+        // 触发事件
+        this._handles.forEach((cb)=>cb(changedRect))
 
         for(var k in this.anchors) {
             this.anchors[k].beLinkeds.forEach(linkedIn=>linkedIn.anchorable.requestUpdate())

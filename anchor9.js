@@ -1,12 +1,14 @@
 /**
  * 
- * 定义锚链的语法： anchor="element.anchor:x,y"
+ * 定义锚链的语法： anchor="<element>.<anchor>:<x>,<y>"
  * 
  *      lfttop
  *      lfttop="id"
  *      lfttop="window"
  *      lfttop="body"
  *      lfttop="parent"
+ *      lfttop="prev"
+ *      lfttop="next"
  *      lfttop="id.rgttop"
  *      lfttop="id.rgttop:20"
  *      lfttop="(selector)")
@@ -21,7 +23,7 @@
     const MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
     const PNAME = "_$Anchor9"
 
-    Anchor9.version = '0.0.2'
+    Anchor9.version = '0.0.3'
 
     function Anchor9 () {
         this.enable = true
@@ -66,7 +68,7 @@
                 anchorable.anchors[linktype].linkByAttrString(element.attributes[linktype].value||linktype)
             })
         }
-        
+
         this.layout()
 
         return this
@@ -254,21 +256,21 @@
         this.anchors.lftbtm.update(rect, 'y')
         this.anchors.btm.update(rect, 'y')
         this.anchors.rgtbtm.update(rect, 'y')
-        
+
         if(this.dbglog)
             console.log(rect)
 
         if(!isNaN(rect.x)) {
             this.element.style.left = rect.x
         }
-        if(!isNaN(rect.width) && this.element.style.width!=rect.width+"px") {
+        if(!isNaN(rect.width) && this.element.offsetWidth!=rect.width) {
             this.element.style.width = rect.width
         }
 
         if(!isNaN(rect.y)) {
             this.element.style.top = rect.y
         }
-        if(!isNaN(rect.height) && this.element.style.height!=rect.height+"px") {
+        if(!isNaN(rect.height) && this.element.offsetHeight!=rect.height) {
             this.element.style.height = rect.height
         }
     }
@@ -349,7 +351,7 @@
         }
         // 同级元素 sibling(<selector>)
         // @todo
-        
+
         // selector
         else {
             // 去掉 ()

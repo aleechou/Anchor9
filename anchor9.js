@@ -21,7 +21,7 @@
     const MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
     const PNAME = "_$Anchor9"
 
-    Anchor9.version = '0.0.1'
+    Anchor9.version = '0.0.2'
 
     function Anchor9 () {
         this.enable = true
@@ -144,11 +144,12 @@
     AnchorableElement.prototype.coordinateSystemElement = function() {
         if(this.element==window)
             return window
-        for(var node=this.element; node; node=node.parentElement) {
+        for(var node=this.element.parentElement; node; node=node.parentElement) {
             if(node.style.position=='absolute'||node.style.position=='relative'||node.style.position=='fixed') {
                 return node
             }
         }
+        return window
     }
 
     /**
@@ -338,6 +339,17 @@
         } else if(eleString=='parent' || !eleString) {
             toElement = this.anchorable.element.parentElement
         }
+        // 相邻元素(前)
+        else if (eleString=='previous' || eleString=='prev') {
+            toElement = this.anchorable.element.previousElementSibling
+        }
+        // 相邻元素(后)
+        else if (eleString=='next') {
+            toElement = this.anchorable.element.nextElementSibling
+        }
+        // 同级元素 sibling(<selector>)
+        // @todo
+        
         // selector
         else {
             // 去掉 ()
@@ -385,13 +397,14 @@
         else if ( 
             // 锚定对象为 window
             this.linkTo.anchorable.element == window
-            // 锚定元素 和 自己 在用一个坐标系中
+            // 锚定元素 和 自己 在同一个坐标系中
             || this.linkTo.anchorable.cacheCoordinateSystemElement==this.anchorable.cacheCoordinateSystemElement
         ) {
             var pos = this.linkTo.positionFromElement(false, axe)
         }
         else {
-            console.log(new Error("必须锚定相同坐标系下的元素"), this)
+            console.error(new Error("必须锚定相同坐标系下的元素("+this.name+"->"+this.linkTo.name+")"))
+            console.error(this)
             return
         }
 

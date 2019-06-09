@@ -292,7 +292,6 @@
             this.element.style.left = rect.x + "px"
         }
         if(!isNaN(rect.width) && this.element.offsetWidth!=rect.width) {
-            // console.log(this.element, this.element.style.width, ",", rect.width)
             this.element.style.width = rect.width + "px"
         }
 

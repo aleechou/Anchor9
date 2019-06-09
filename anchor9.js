@@ -1,17 +1,26 @@
 /**
  * 
- * 定义锚链的语法： anchor="element.anchor:x,y"
+ * 定义锚链的语法： anchor="<element>.<anchor>:<x>,<y>"
  * 
  *      lfttop
  *      lfttop="id"
  *      lfttop="window"
  *      lfttop="body"
  *      lfttop="parent"
+ *      lfttop="prev"
+ *      lfttop="next"
  *      lfttop="id.rgttop"
  *      lfttop="id.rgttop:20"
  *      lfttop="(selector)")
  *      lfttop="(selector).rgttop:20"[]
  *      lfttop="(selector).rgttop:20"
+ * 
+ * 
+ * Element 事件：
+ * 
+ *  update: 当元素被 anchor9 调整过位置/尺寸后触发
+ * 
+ *  layout: 调用 Anchor9.layout() 方法计算元素的位置/尺寸后触发，用于首次初始化元素在页面内的布局
  * 
  */
 
@@ -21,7 +30,7 @@
     const MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
     const PNAME = "_$Anchor9"
 
-    Anchor9.version = '0.0.1'
+    Anchor9.version = '0.0.4'
 
     function Anchor9 () {
         this.enable = true
@@ -66,7 +75,7 @@
                 anchorable.anchors[linktype].linkByAttrString(element.attributes[linktype].value||linktype)
             })
         }
-        
+
         this.layout()
 
         return this
@@ -74,7 +83,7 @@
     
     Anchor9.prototype.layout = function() {
         if( !this.enable ) return
-        this.lstAnchorableElements.forEach(anchorable=>anchorable.update())
+        this.lstAnchorableElements.forEach(anchorable=>anchorable.update(true))
     }
 
     function AnchorableElement(element) {
@@ -101,6 +110,7 @@
         this.cacheCoordinateSystemElement = this.coordinateSystemElement()
         this.cacheRect = this.rect()
         this.dbglog = element.attributes && !!element.attributes.dbglog
+        this._handles = []
 
         if(element==window) {
             window.addEventListener("resize",()=>this.emitChanged())
@@ -114,6 +124,16 @@
             this.elementsObserver.observe(element, { attributes: true, childList: true, characterData: true, subtree: true })
         }
     }
+
+    AnchorableElement.prototype.on = function(cb) {
+        this._handles.push(cb)
+    }
+    AnchorableElement.prototype.off = function(cb) {
+        var idx = this._handles.indexOf(cb)
+        if(idx>=0)
+            this._handles.splice(idx,1)
+    }
+
     /**
      * 计算元素的全局坐标
      * parent 链上所有 absolute 元素的 offsetTop/offsetLeft 的和
@@ -144,11 +164,12 @@
     AnchorableElement.prototype.coordinateSystemElement = function() {
         if(this.element==window)
             return window
-        for(var node=this.element; node; node=node.parentElement) {
+        for(var node=this.element.parentElement; node; node=node.parentElement) {
             if(node.style.position=='absolute'||node.style.position=='relative'||node.style.position=='fixed') {
                 return node
             }
         }
+        return window
     }
 
     /**
@@ -191,22 +212,32 @@
     /**
      * 检查元素的 rect ，如果发生了变化则返回新的 rect, 否则返回 undefined
      */
-    AnchorableElement.prototype.isChanged = function() {
-        var newRect = this.rect()
+    AnchorableElement.prototype.isChanged = function(newRect) {
+        if(!newRect)
+            newRect = this.rect()
+        var changedRect = {}
+        var changed = false
         for(var k in newRect) {
-            if(newRect[k]!=this.cacheRect[k]) 
-                return newRect
+            if(newRect[k]!=this.cacheRect[k]) {
+                changedRect[k] = newRect[k]
+                changed = true
+            }
         }
+        return changed? changedRect: null
     }
     /**
      * 如果自身的位置和尺寸发生变化，导致自身锚点位置变化，
      * 更新绑定到这些锚点的元素
      */
     AnchorableElement.prototype.emitChanged = function() {
-        var newRect = this.isChanged()
-        if(!newRect) return
+        var newRect = this.rect()
+        var changedRect = this.isChanged(newRect)
+        if(!changedRect) return
 
         this.cacheRect = newRect
+
+        // 触发事件
+        this._handles.forEach((cb)=>cb(changedRect))
 
         for(var k in this.anchors) {
             this.anchors[k].beLinkeds.forEach(linkedIn=>linkedIn.anchorable.requestUpdate())
@@ -224,7 +255,7 @@
     /**
      * 根据连接的锚点，更新元素的位置和尺度
      */
-    AnchorableElement.prototype.update = function() {
+    AnchorableElement.prototype.update = function(isLayout) {
 
         var rect = {
             x:NaN, y:NaN,
@@ -253,22 +284,29 @@
         this.anchors.lftbtm.update(rect, 'y')
         this.anchors.btm.update(rect, 'y')
         this.anchors.rgtbtm.update(rect, 'y')
-        
+
         if(this.dbglog)
             console.log(rect)
 
         if(!isNaN(rect.x)) {
-            this.element.style.left = rect.x
+            this.element.style.left = rect.x + "px"
         }
-        if(!isNaN(rect.width) && this.element.style.width!=rect.width+"px") {
-            this.element.style.width = rect.width
+        if(!isNaN(rect.width) && this.element.offsetWidth!=rect.width) {
+            // console.log(this.element, this.element.style.width, ",", rect.width)
+            this.element.style.width = rect.width + "px"
         }
 
         if(!isNaN(rect.y)) {
-            this.element.style.top = rect.y
+            this.element.style.top = rect.y + "px"
         }
-        if(!isNaN(rect.height) && this.element.style.height!=rect.height+"px") {
-            this.element.style.height = rect.height
+        if(!isNaN(rect.height) && this.element.offsetHeight!=rect.height) {
+            this.element.style.height = rect.height + "px"
+        }
+
+        this.element.dispatchEvent(new Event('anchor9.update'))
+
+        if(isLayout) {
+            this.element.dispatchEvent(new Event('anchor9.layout'))
         }
     }
 
@@ -338,6 +376,17 @@
         } else if(eleString=='parent' || !eleString) {
             toElement = this.anchorable.element.parentElement
         }
+        // 相邻元素(前)
+        else if (eleString=='previous' || eleString=='prev') {
+            toElement = this.anchorable.element.previousElementSibling
+        }
+        // 相邻元素(后)
+        else if (eleString=='next') {
+            toElement = this.anchorable.element.nextElementSibling
+        }
+        // 同级元素 sibling(<selector>)
+        // @todo
+
         // selector
         else {
             // 去掉 ()
@@ -378,20 +427,23 @@
             return
         }
 
-        // 锚定的元素是自己的坐标系元素
-        if( this.linkTo.anchorable.element == this.anchorable.cacheCoordinateSystemElement ){
+        var coorEle = this.anchorable.coordinateSystemElement()
+
+        // 锚定到自己的坐标系元素上
+        if( this.linkTo.anchorable.element == coorEle ){
             var pos = this.linkTo.positionFromElement(true, axe)
         }
         else if ( 
             // 锚定对象为 window
             this.linkTo.anchorable.element == window
-            // 锚定元素 和 自己 在用一个坐标系中
-            || this.linkTo.anchorable.cacheCoordinateSystemElement==this.anchorable.cacheCoordinateSystemElement
+            // 锚定元素 和 自己 在同一个坐标系中
+            || this.linkTo.anchorable.coordinateSystemElement()==coorEle
         ) {
             var pos = this.linkTo.positionFromElement(false, axe)
         }
         else {
-            console.log(new Error("必须锚定相同坐标系下的元素"), this)
+            console.error(new Error("必须锚定相同坐标系下的元素("+this.name+"->"+this.linkTo.name+")"))
+            console.error(this)
             return
         }
 

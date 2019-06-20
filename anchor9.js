@@ -30,11 +30,16 @@
     const MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
     const PNAME = "_$Anchor9"
 
-    Anchor9.version = '0.0.4'
+    Anchor9.version = '0.0.5'
 
-    function Anchor9 () {
-        this.enable = true
-        this.lstAnchorableElements = []
+    function Anchor9 (el) {
+        if(el && el instanceof HTMLElement) {
+            return AnchorableElement(el)
+        }
+        else {
+            this.enable = true
+            this.lstAnchorableElements = []
+        }
     }
 
     const LinkTypes = {
@@ -72,7 +77,7 @@
                     this.lstAnchorableElements.push(anchorable)
 
                 // 连接两个锚定点
-                anchorable.anchors[linktype].linkByAttrString(element.attributes[linktype].value||linktype)
+                anchorable[linktype].linkByAttrString(element.attributes[linktype].value||linktype)
             })
         }
 
@@ -83,7 +88,11 @@
     
     Anchor9.prototype.layout = function() {
         if( !this.enable ) return
-        this.lstAnchorableElements.forEach(anchorable=>anchorable.update(true))
+        this.lstAnchorableElements.forEach(anchorable=>{
+            anchorable.update()
+            anchorable.element.dispatchEvent(new Event('anchor9.layout'))
+        })
+        window.dispatchEvent(new Event('anchor9.layout'))
     }
 
     function AnchorableElement(element) {
@@ -93,45 +102,41 @@
         }
         element[PNAME] = this
 
-        this.element = element
+        this.element    = element
         this.needUpdate = false
-        this.anchors = {
-            lfttop: new Anchor(this, 'lfttop') ,
-            top:    new Anchor(this, 'top') ,
-            rgttop: new Anchor(this, 'rgttop') ,
-            lft:    new Anchor(this, 'lft') ,
-            center: new Anchor(this, 'center') ,
-            rgt:    new Anchor(this, 'rgt') ,
-            lftbtm: new Anchor(this, 'lftbtm') ,
-            btm:    new Anchor(this, 'btm') ,
-            rgtbtm: new Anchor(this, 'rgtbtm') ,
+
+        for(var k in LinkDirection) {
+            this[k] = new Anchor(this, k)
         }
 
         this.cacheCoordinateSystemElement = this.coordinateSystemElement()
         this.cacheRect = this.rect()
         this.dbglog = element.attributes && !!element.attributes.dbglog
-        this._handles = []
 
         if(element==window) {
             window.addEventListener("resize",()=>this.emitChanged())
         }
         else {
             this.elementsObserver = new MutationObserver((mutations)=>{
+                
+                for(var m of mutations) {
+                    if( m.type == 'attributes' ) {
+                        var attrname = m.attributeName.toLowerCase()
+                        if( LinkTypes[attrname] ) {
+                            this[attrname].linkByAttrString(element.attributes[m.attributeName].value)
+                            this.requestUpdate()
+                            return 
+                        }
+                    }
+                }
+
                 this.emitChanged()
+
                 if(this.dbglog)
                     console.log(mutations)
             })
             this.elementsObserver.observe(element, { attributes: true, childList: true, characterData: true, subtree: true })
         }
-    }
-
-    AnchorableElement.prototype.on = function(cb) {
-        this._handles.push(cb)
-    }
-    AnchorableElement.prototype.off = function(cb) {
-        var idx = this._handles.indexOf(cb)
-        if(idx>=0)
-            this._handles.splice(idx,1)
     }
 
     /**
@@ -190,6 +195,10 @@
             return multiple * window['inner'+attrs[1]]
         }
         else {
+            // 隐藏元素
+            if( (attrs=='Width' || attrs=='Height') && this.element.style.display == 'none' ){
+                return 0
+            }
             var base = 0
             if(!local) {
                 base = this.element['offset'+attrs[0]]
@@ -232,15 +241,14 @@
     AnchorableElement.prototype.emitChanged = function() {
         var newRect = this.rect()
         var changedRect = this.isChanged(newRect)
-        if(!changedRect) return
+        if(!changedRect) {
+            return
+        }
 
         this.cacheRect = newRect
 
-        // 触发事件
-        this._handles.forEach((cb)=>cb(changedRect))
-
-        for(var k in this.anchors) {
-            this.anchors[k].beLinkeds.forEach(linkedIn=>linkedIn.anchorable.requestUpdate())
+        for(var k in LinkDirection) {
+            this[k]._beLinkeds.forEach(linkedIn=>linkedIn._anchorable.requestUpdate())
         }
     }
     AnchorableElement.prototype.requestUpdate = function() {
@@ -255,7 +263,7 @@
     /**
      * 根据连接的锚点，更新元素的位置和尺度
      */
-    AnchorableElement.prototype.update = function(isLayout) {
+    AnchorableElement.prototype.update = function() {
 
         var rect = {
             x:NaN, y:NaN,
@@ -264,26 +272,26 @@
         }
 
         // 计算 x 和 width , 从左往右计算
-        this.anchors.lfttop.update(rect, 'x')
-        this.anchors.lft.update(rect, 'x')
-        this.anchors.lftbtm.update(rect, 'x')
-        this.anchors.top.update(rect, 'x')
-        this.anchors.center.update(rect, 'x')
-        this.anchors.btm.update(rect, 'x')
-        this.anchors.rgttop.update(rect, 'x')
-        this.anchors.rgt.update(rect, 'x')
-        this.anchors.rgtbtm.update(rect, 'x')
+        this.lfttop.update(rect, 'x')
+        this.lft.update(rect, 'x')
+        this.lftbtm.update(rect, 'x')
+        this.top.update(rect, 'x')
+        this.center.update(rect, 'x')
+        this.btm.update(rect, 'x')
+        this.rgttop.update(rect, 'x')
+        this.rgt.update(rect, 'x')
+        this.rgtbtm.update(rect, 'x')
 
         // 计算 y 和 height， 从上往下
-        this.anchors.lfttop.update(rect, 'y')
-        this.anchors.top.update(rect, 'y')
-        this.anchors.rgttop.update(rect, 'y')
-        this.anchors.lft.update(rect, 'y')
-        this.anchors.center.update(rect, 'y')
-        this.anchors.rgt.update(rect, 'y')
-        this.anchors.lftbtm.update(rect, 'y')
-        this.anchors.btm.update(rect, 'y')
-        this.anchors.rgtbtm.update(rect, 'y')
+        this.lfttop.update(rect, 'y')
+        this.top.update(rect, 'y')
+        this.rgttop.update(rect, 'y')
+        this.lft.update(rect, 'y')
+        this.center.update(rect, 'y')
+        this.rgt.update(rect, 'y')
+        this.lftbtm.update(rect, 'y')
+        this.btm.update(rect, 'y')
+        this.rgtbtm.update(rect, 'y')
 
         if(this.dbglog)
             console.log(rect)
@@ -303,9 +311,11 @@
         }
 
         this.element.dispatchEvent(new Event('anchor9.update'))
-
-        if(isLayout) {
-            this.element.dispatchEvent(new Event('anchor9.layout'))
+    }
+    
+    AnchorableElement.prototype.unlinkAll = function() {
+        for(var k in LinkDirection) {
+            this[k].unlink()
         }
     }
 
@@ -314,50 +324,92 @@
      */
     function Anchor(anchorable, name) {
 
-        this.anchorable = anchorable
-        this.name = name
+        this._anchorable = anchorable
+        this._name = name
+        this._defineAttr = null
 
         // 刻度信息
-        this.scale = {
+        this._scale = {
             x: LinkDirection[name][0] ,
             y: LinkDirection[name][1]
         }
 
-        this.linkTo = null
-        this.linkOffset = {
-            x: 0, y: 0
+        this._linkTo = null
+        this.offset = {
+            _x: 0, _y: 0
         }
-        this.linkString = null
+        defineOffsetProp(this, 'x', '_x')
+        defineOffsetProp(this, 'y', '_y')
 
-        this.beLinkeds = []
+        this._beLinkeds = []
     }
+    function defineOffsetProp(anchor, name, _name) {
+        anchor.offset.__defineSetter__(name, function(v){
+            if( anchor.offset[_name] != v ) {
+                anchor.offset[_name] = v
+                anchor._anchorable.requestUpdate()
+            }
+        })
+        anchor.offset.__defineGetter__(name, function(){
+            return anchor.offset[_name]
+        })
+    }
+    
     Anchor.prototype.positionFromElement = function(local, axe) {
         var pos = {}
         if(!axe) {
-            pos.x = this.anchorable.rectValue('h', this.scale.x, local)
-            pos.y = this.anchorable.rectValue('v', this.scale.y, local)
+            pos.x = this._anchorable.rectValue('h', this._scale.x, local)
+            pos.y = this._anchorable.rectValue('v', this._scale.y, local)
         } else {
-            pos[axe] = this.anchorable.rectValue(axe=='x'? 'h': 'v', this.scale[axe], local)
+            pos[axe] = this._anchorable.rectValue(axe=='x'? 'h': 'v', this._scale[axe], local)
         }
         return pos
     }
     
-    Anchor.prototype.linkByAttrString = function(attrString) {
-        if(this.linkTo) {
-            this.unlink()
+    
+    Anchor.prototype.targetByName = function(name) {
+        if(name=='window') {
+            return window
+        } else if(name=='parent' || !name) {
+            return this._anchorable.element.parentElement
         }
+        // 相邻元素(前)
+        else if (name=='previous' || name=='prev') {
+            return this._anchorable.element.previousElementSibling
+        }
+        // 相邻元素(后)
+        else if (name=='next') {
+            return this._anchorable.element.nextElementSibling
+        }
+        // 同级元素 sibling(<selector>)
+        // @todo
+
+        // selector
+        else {
+            // 去掉 ()
+            if(name[0]=='(' && name[name.length-1]==')')
+                name = name.substr(1,name.length-2)
+            console.log(name)
+            return document.querySelector(name)
+        }
+    }
+
+    Anchor.prototype.linkByAttrString = function(attrString) {
+
+        this._defineAttr = attrString
         
         // 偏移
         var arr = attrString.split(":")
+        var x = 0, y = 0
         if(arr.length>1) {
             var xy = arr.pop().split(",")
-            this.linkOffset.x = parseFloat(xy[0]) || 0
-            this.linkOffset.y = parseFloat(xy[1]) || 0
+            x = parseFloat(xy[0]) || 0
+            y = parseFloat(xy[1]) || 0
             attrString = arr.join(":")
         }
 
         // 目标锚点的名字
-        var toAnchorName = this.name
+        var toAnchorName = this._name
         arr = attrString.split(".")
         var maybeName = arr.pop()
         if( LinkTypes[maybeName] ) {
@@ -366,101 +418,115 @@
         else {
             arr.push(maybeName)
         }
-        var eleString = arr.join('.').trim()
-
+        
         // 目标对象
-        var toElement = null
-        if(eleString=='window') {
-            toElement = window
-        } else if(eleString=='parent' || !eleString) {
-            toElement = this.anchorable.element.parentElement
-        }
-        // 相邻元素(前)
-        else if (eleString=='previous' || eleString=='prev') {
-            toElement = this.anchorable.element.previousElementSibling
-        }
-        // 相邻元素(后)
-        else if (eleString=='next') {
-            toElement = this.anchorable.element.nextElementSibling
-        }
-        // 同级元素 sibling(<selector>)
-        // @todo
+        var eleString = arr.join('.').trim()
+        
+        this.link(eleString, toAnchorName, x, y, true)
+    }
 
-        // selector
+    Anchor.prototype.link = function(target, anchorName, offsetX, offsetY, dontUpdateImmediately) {
+
+        if(!target) {
+            target = this._linkTo? this._linkTo._anchorable.element: 'parent'
+        }
+        if(typeof(target)=='string') {
+            target = this.targetByName(target)
+        }
+        if(!target instanceof HTMLElement) {
+            throw new Error('unknow type of Anchor9 link target: '+target)
+        }
+
+        var toAnchorable = new AnchorableElement(target)
+
+        if(!anchorName) {
+            anchorName = this._linkTo? this._linkTo._name: this._name
+        }
+
+        if(offsetX!=undefined)
+            this.offset.x = offsetX
+        if(offsetY!=undefined)
+            this.offset.y = offsetY
+
+        
+        let _linkTo = toAnchorable[anchorName]
+
+        if(this._linkTo && this._linkTo!=_linkTo) {
+            this.unlink()
+        }
+
+        this._linkTo = _linkTo
+        // console.log(anchorName, this._linkTo)
+
+        // 加入到to锚点的被锚定列表
+        this._linkTo._beLinkeds.push(this)
+
+        // 将对象改为absolute/fixed
+        if(this._anchorable.element==window) {
+            if(this._anchorable.element.style.position!='fixed')  {
+                this._anchorable.element.style.position = 'fixed'
+            }
+        }
         else {
-            // 去掉 ()
-            if(eleString[0]=='(' && eleString[eleString.length-1]==')')
-                eleString = eleString.substr(1,eleString.length-2)
-            toElement = document.querySelector(eleString)
+            if(this._anchorable.element.style.position!='absolute')  {
+                this._anchorable.element.style.position = 'absolute'
+            }
         }
 
-        if(toElement) {
-            this.linkTo = new AnchorableElement(toElement).anchors[toAnchorName]
-
-            // 加入到to锚点的被锚定列表
-            this.linkTo.beLinkeds.push(this)
-
-            // 将对象改为absolute/fixed
-            if(toElement==window) {
-                if(this.anchorable.element.style.position!='fixed')  {
-                    this.anchorable.element.style.position = 'fixed'
-                }
-            }
-            else {
-                if(this.anchorable.element.style.position!='absolute')  {
-                    this.anchorable.element.style.position = 'absolute'
-                }
-            }
+        if(!dontUpdateImmediately) {
+            this._anchorable.requestUpdate()
         }
     }
 
     Anchor.prototype.unlink = function() {
-        if(this.linkTo) {
+        if(this._linkTo) {
             // 从to锚点的 被锚定列表中移除自己
-            this.linkTo.beLinkeds.splice(this.linkTo.beLinkeds.indexOf(this),1)
-            this.linkTo = null
+            this._linkTo._beLinkeds.splice(this._linkTo._beLinkeds.indexOf(this),1)
+            this._linkTo = null
+            this.offset.x = null
+            this.offset.y = null
         }
     }
     Anchor.prototype.update = function(rect, axe) {
-        if( !this.linkTo || this.linkTo.element ) {
+        if( !this._linkTo || this._linkTo.element ) {
             return
         }
 
-        var coorEle = this.anchorable.coordinateSystemElement()
+        var coorEle = this._anchorable.coordinateSystemElement()
 
         // 锚定到自己的坐标系元素上
-        if( this.linkTo.anchorable.element == coorEle ){
-            var pos = this.linkTo.positionFromElement(true, axe)
+        if( this._linkTo._anchorable.element == coorEle ){
+            var pos = this._linkTo.positionFromElement(true, axe)
         }
         else if ( 
             // 锚定对象为 window
-            this.linkTo.anchorable.element == window
+            this._linkTo._anchorable.element == window
             // 锚定元素 和 自己 在同一个坐标系中
-            || this.linkTo.anchorable.coordinateSystemElement()==coorEle
+            || this._linkTo._anchorable.coordinateSystemElement()==coorEle
         ) {
-            var pos = this.linkTo.positionFromElement(false, axe)
+            var pos = this._linkTo.positionFromElement(false, axe)
         }
         else {
-            console.error(new Error("必须锚定相同坐标系下的元素("+this.name+"->"+this.linkTo.name+")"))
+            console.error(new Error("必须锚定相同坐标系下的元素("+this._name+"->"+this._linkTo._name+")"))
             console.error(this)
             return
         }
 
-        if(this.anchorable.dbglog) {
-            console.log(this.name, '->', this.linkTo.name, pos, 'offset=', this.linkOffset)
+        if(this._anchorable.dbglog) {
+            console.log(this._name, '->', this._linkTo._name, pos, 'offset=', this.offset)
         }
 
-        pos[axe]+= this.linkOffset[axe]
+        pos[axe]+= this.offset[axe]
 
         var size = axe=='x'? 'width': 'height'
         // 左或上
-        if(this.scale[axe]==1) {
+        if(this._scale[axe]==1) {
             if(isNaN(rect[axe])){
                 rect[axe] = pos[axe]
             }
         }
         // 中间
-        else if(this.scale[axe]==0) {
+        else if(this._scale[axe]==0) {
             if(isNaN(rect[axe])){
                 rect[axe] = pos[axe] - rect[size]/2
             }
@@ -469,7 +535,7 @@
             }
         }
         // 右或下
-        else if(this.scale[axe]==-1) {
+        else if(this._scale[axe]==-1) {
             if(isNaN(rect[axe])){
                 rect[axe] = pos[axe] - rect[size]
             }
@@ -482,5 +548,5 @@
 
 
     global.Anchor9 = Anchor9
-    global.AnchorableElement = AnchorableElement
+    global._anchorableElement = AnchorableElement
 })(this);

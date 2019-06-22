@@ -85,14 +85,33 @@
 
         return this
     }
+
+    
+    Anchor9.prototype.waitAllElementsUpdateDone = function(cb) {
+        for(var anchorable of this.lstAnchorableElements) {
+            // 等待所有 anchorable 元素都 update 完毕
+            if(anchorable.needUpdate) {
+                setTimeout(()=>{
+                    this.waitAllElementsUpdateDone(cb)
+                }, 0)
+                return
+            }
+        }
+        cb()
+    }
     
     Anchor9.prototype.layout = function() {
         if( !this.enable ) return
         this.lstAnchorableElements.forEach(anchorable=>{
             anchorable.update()
-            anchorable.element.dispatchEvent(new Event('anchor9.layout'))
         })
-        window.dispatchEvent(new Event('anchor9.layout'))
+        
+        this.waitAllElementsUpdateDone(()=>{
+            this.lstAnchorableElements.forEach( anchorable => {
+                anchorable.element.dispatchEvent(new Event('anchor9.layout')) 
+            })
+            window.dispatchEvent(new Event('anchor9.layout'))
+        })
     }
 
     function AnchorableElement(element) {

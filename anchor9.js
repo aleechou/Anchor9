@@ -88,16 +88,18 @@
 
     
     Anchor9.prototype.waitAllElementsUpdateDone = function(cb) {
-        for(var anchorable of this.lstAnchorableElements) {
-            // 等待所有 anchorable 元素都 update 完毕
-            if(anchorable.needUpdate) {
-                setTimeout(()=>{
-                    this.waitAllElementsUpdateDone(cb)
-                }, 0)
-                return
+        setTimeout(()=>{
+            for(var anchorable of this.lstAnchorableElements) {
+                // 等待所有 anchorable 元素都 update 完毕
+                if(anchorable.needUpdate) {
+                    setTimeout(()=>{
+                        this.waitAllElementsUpdateDone(cb)
+                    }, 0)
+                    return
+                }
             }
-        }
-        cb()
+            cb()
+        }, 0)
     }
     
     Anchor9.prototype.layout = function() {
@@ -414,7 +416,6 @@
             // 去掉 ()
             if(name[0]=='(' && name[name.length-1]==')')
                 name = name.substr(1,name.length-2)
-            console.log(name)
             return document.querySelector(name)
         }
     }

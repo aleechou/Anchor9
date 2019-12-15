@@ -30,7 +30,7 @@
     const MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
     const PNAME = "_$Anchor9"
 
-    Anchor9.version = '0.0.5'
+    Anchor9.version = '0.0.6'
 
     function Anchor9 (el) {
         if(el && el instanceof HTMLElement) {
@@ -374,6 +374,12 @@
         })
     }
     
+    Anchor.prototype.setOffset = function(x,y) {
+        this.offset._x = x
+        this.offset._y = y
+        this._anchorable.requestUpdate()
+    }
+
     Anchor.prototype.positionFromElement = function(local, axe) {
         var pos = {}
         if(!axe) {
@@ -450,7 +456,11 @@
             target = this._linkTo? this._linkTo._anchorable.element: 'parent'
         }
         if(typeof(target)=='string') {
-            target = this.targetByName(target)
+            var _target = this.targetByName(target)
+            if(!_target) {
+                throw new Error('unknow Anchor9 link target: '+target)
+            }
+            target = _target
         }
         if(!target instanceof HTMLElement) {
             throw new Error('unknow type of Anchor9 link target: '+target)

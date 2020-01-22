@@ -15,6 +15,15 @@
  *      lfttop="(selector).rgttop:20"[]
  *      lfttop="(selector).rgttop:20"
  * 
+ *     lfttop        top          rgttop
+ *        O-----------O-------------O
+ *        |                         |
+ *        |                         |
+ *    lft O        center           O rgt
+ *        |                         |
+ *        |                         |
+ *        O-----------O-------------O
+ *     lftbtm        btm          rgtbtm
  * 
  * Element 事件：
  * 
@@ -30,7 +39,7 @@
     const MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
     const PNAME = "_$Anchor9"
 
-    Anchor9.version = '0.0.6'
+    Anchor9.version = '0.0.7'
 
     function Anchor9 (el) {
         if(el && el instanceof HTMLElement) {
@@ -64,13 +73,19 @@
         center: [ 0, 0] ,
     }
     
-    Anchor9.prototype.init = function(rootElement) {
+    Anchor9.prototype.init = function(rootElement, options) {
         if(!rootElement) rootElement = document.body
+
+        if(!options) {
+            options = {
+                autoTransform: true
+            }
+        }
 
         // 找到html属性里定义的所有锚定关系
         for(var linktype in LinkSelecters) {
             rootElement.querySelectorAll(LinkSelecters[linktype]).forEach((element)=>{
-                var anchorable = new AnchorableElement(element)
+                var anchorable = new AnchorableElement(element, options.autoTransform)
 
                 // 加入到缓存列表
                 if(!this.lstAnchorableElements.includes(anchorable))
@@ -116,7 +131,7 @@
         })
     }
 
-    function AnchorableElement(element) {
+    function AnchorableElement(element, autoTransform) {
         // AnchorableElement 是 HTML Elment 元素的享元对象
         if(element[PNAME]) {
             return element[PNAME]
@@ -134,29 +149,39 @@
         this.cacheRect = this.rect()
         this.dbglog = element.attributes && !!element.attributes.dbglog
 
+        if(autoTransform===undefined) {
+            if(element.attributes)
+                autoTransform = element.attributes.auto===undefined || element.attributes.auto=="true"
+            else
+                autoTransform = true
+        }
+
         if(element==window) {
             window.addEventListener("resize",()=>this.emitChanged())
         }
         else {
-            this.elementsObserver = new MutationObserver((mutations)=>{
-                
-                for(var m of mutations) {
-                    if( m.type == 'attributes' ) {
-                        var attrname = m.attributeName.toLowerCase()
-                        if( LinkTypes[attrname] ) {
-                            this[attrname].linkByAttrString(element.attributes[m.attributeName].value)
-                            this.requestUpdate()
-                            return 
+            if(autoTransform) {
+                this.elementsObserver = new MutationObserver((mutations)=>{
+                    for(var m of mutations) {
+                        if( m.type == 'attributes' ) {
+                            var attrname = m.attributeName.toLowerCase()
+                            if( LinkTypes[attrname] ) {
+                                this[attrname].linkByAttrString(element.attributes[m.attributeName].value)
+                                this.requestUpdate()
+                                return 
+                            }
                         }
                     }
-                }
 
-                this.emitChanged()
+                    this.emitChanged()
 
-                if(this.dbglog)
-                    console.log(mutations)
-            })
-            this.elementsObserver.observe(element, { attributes: true, childList: true, characterData: true, subtree: true })
+                    if(this.dbglog)
+                        console.log(mutations)
+                })
+                this.elementsObserver.observe(element, { attributes: true, childList: false, characterData: false, subtree: false })
+            }
+
+            
         }
     }
 

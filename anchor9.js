@@ -39,7 +39,7 @@
     const MutationObserver = window.MutationObserver || window.WebKitMutationObserver || window.MozMutationObserver;
     const PNAME = "_$Anchor9"
 
-    Anchor9.version = '0.0.7'
+    Anchor9.version = '0.0.8'
 
     function Anchor9 (el) {
         if(el && el instanceof HTMLElement) {
@@ -72,6 +72,11 @@
         rgtbtm: [-1,-1] ,
         center: [ 0, 0] ,
     }
+    const AloneOffsetAttrs = {}
+    for(var k in LinkTypes) {
+        AloneOffsetAttrs[k+".x"] = [LinkTypes[k], 'x']
+        AloneOffsetAttrs[k+".y"] = [LinkTypes[k], 'y']
+    }
     
     Anchor9.prototype.init = function(rootElement, options) {
         if(!rootElement) rootElement = document.body
@@ -92,7 +97,7 @@
                     this.lstAnchorableElements.push(anchorable)
 
                 // 连接两个锚定点
-                anchorable[linktype].linkByAttrString(element.attributes[linktype].value||linktype)
+                anchorable[linktype].linkByAttrString(element.attributes[linktype].value||linktype, linktype)
             })
         }
 
@@ -165,11 +170,19 @@
                     for(var m of mutations) {
                         if( m.type == 'attributes' ) {
                             var attrname = m.attributeName.toLowerCase()
+                            // 连接定义变更
                             if( LinkTypes[attrname] ) {
                                 this[attrname].linkByAttrString(element.attributes[m.attributeName].value)
                                 this.requestUpdate()
                                 return 
                             }
+                            // 独立偏移量属性变更
+                            // eg: lfttop.x=100
+                            else if(AloneOffsetAttrs[attrname]) {
+                                var anchorname = AloneOffsetAttrs[attrname][0]
+                                AnchorableElement(element)[anchorname].offset[AloneOffsetAttrs[attrname][1]] = parseFloat(element.attributes[m.attributeName].value)
+                            }
+                            
                         }
                     }
 
@@ -183,6 +196,10 @@
 
             
         }
+    }
+
+    function checkoffsetValueChanged(axis) {
+
     }
 
     /**
@@ -445,7 +462,7 @@
         }
     }
 
-    Anchor.prototype.linkByAttrString = function(attrString) {
+    Anchor.prototype.linkByAttrString = function(attrString, linktype) {
 
         this._defineAttr = attrString
         
@@ -458,6 +475,18 @@
             y = parseFloat(xy[1]) || 0
             attrString = arr.join(":")
         }
+
+        // 在属性中找独立定义的偏移值
+        // eg: lfttop.x=100
+        if(linktype) {
+            if( this._anchorable.element.attributes[linktype+".x"] ) {
+                x = parseFloat(this._anchorable.element.attributes[linktype+".x"])
+            } 
+            if( this._anchorable.element.attributes[linktype+".y"] ) {
+                y = parseFloat(this._anchorable.element.attributes[linktype+".y"])
+            }
+        }
+
 
         // 目标锚点的名字
         var toAnchorName = this._name
